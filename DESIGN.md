@@ -25,12 +25,24 @@ popup.html/js  ──(chrome.tabs.sendMessage)──▶  content.js (injected in
 
 | File | Role |
 |------|------|
-| `manifest.json` | Extension config — permissions, content scripts, service worker |
+| `manifest.json` | Active manifest used for whichever browser you are currently loading |
+| `manifest.chrome.json` | Chrome manifest source — permissions, content scripts, MV3 service worker |
+| `manifest.firefox.json` | Firefox manifest source — permissions, content scripts, background script |
 | `popup.html` | Popup UI with two buttons: "Copy" and "Send to DeepSeek" |
 | `popup.js` | Popup logic — extract transcript, copy to clipboard or delegate to background |
 | `content.js` | YouTube DOM interaction — title extraction, transcript scraping |
-| `background.js` | Service worker — opens DeepSeek tab, injects paste-and-submit script |
+| `background.js` | Shared background logic — opens DeepSeek tab, injects paste-and-submit script |
 | `icons/` | Extension icons (16/48/128px) |
+
+## Browser packaging
+
+- Keep the real extension files in the project root.
+- `manifest.chrome.json` stores the Chrome Manifest V3 configuration.
+- `manifest.firefox.json` stores the Firefox-compatible background configuration.
+- `manifest.json` is the active manifest used when loading the extension.
+- To test in Chrome, make the Chrome manifest the active `manifest.json`.
+- To test in Firefox, make the Firefox manifest the active `manifest.json`.
+- Only the manifest changes between browsers; all JavaScript, HTML, and icons remain shared in the root folder.
 
 ## Key Design Decisions
 

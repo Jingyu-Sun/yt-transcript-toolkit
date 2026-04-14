@@ -1,7 +1,9 @@
 // Background service worker.
 // Handles opening DeepSeek in a new tab and injecting the transcript text.
 
-chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+const ext = globalThis.browser || chrome;
+
+ext.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "sendToDeepSeek" && request.text) {
     handleSendToDeepSeek(request.text)
       .then(() => sendResponse({ ok: true }))
@@ -15,20 +17,26 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
  * then inject a script that pastes the text and submits.
  */
 async function handleSendToDeepSeek(text) {
-  // Open a new tab
-  const tab = await chrome.tabs.create({ url: "https://chat.deepseek.com" });
+  const tab = await createTab({ url: "https://chat.deepseek.com" });
 
-  // Wait for the tab to finish loading
   await waitForTabComplete(tab.id);
-
-  // Give the Vue app a moment to initialize after DOM load
   await sleep(2000);
+  await executeDeepSeekScript(tab.id, text);
+}
 
-  // Inject script to paste text and submit
-  await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: pasteAndSubmit,
-    args: [text],
+function createTab(createProperties) {
+  if (globalThis.browser?.tabs?.create) {
+    return globalThis.browser.tabs.create(createProperties);
+  }
+
+  return new Promise((resolve, reject) => {
+    chrome.tabs.create(createProperties, (tab) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve(tab);
+    });
   });
 }
 
@@ -38,20 +46,59 @@ async function handleSendToDeepSeek(text) {
 function waitForTabComplete(tabId, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      chrome.tabs.onUpdated.removeListener(listener);
+      ext.tabs.onUpdated.removeListener(listener);
       reject(new Error("Timed out waiting for DeepSeek page to load."));
     }, timeoutMs);
 
     function listener(updatedTabId, changeInfo) {
       if (updatedTabId === tabId && changeInfo.status === "complete") {
-        chrome.tabs.onUpdated.removeListener(listener);
+        ext.tabs.onUpdated.removeListener(listener);
         clearTimeout(timer);
         resolve();
       }
     }
 
-    chrome.tabs.onUpdated.addListener(listener);
+    ext.tabs.onUpdated.addListener(listener);
   });
+}
+
+async function executeDeepSeekScript(tabId, text) {
+  if (globalThis.browser?.tabs?.executeScript) {
+    const payload = JSON.stringify(text);
+    await globalThis.browser.tabs.executeScript(tabId, {
+      code: `(${pasteAndSubmit.toString()})(${payload});`,
+    });
+    return;
+  }
+
+  if (chrome.scripting?.executeScript) {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: pasteAndSubmit,
+      args: [text],
+    });
+    return;
+  }
+
+  if (chrome.tabs?.executeScript) {
+    const payload = JSON.stringify(text);
+    await new Promise((resolve, reject) => {
+      chrome.tabs.executeScript(
+        tabId,
+        { code: `(${pasteAndSubmit.toString()})(${payload});` },
+        () => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          resolve();
+        }
+      );
+    });
+    return;
+  }
+
+  throw new Error("Script injection is not supported in this browser.");
 }
 
 /**

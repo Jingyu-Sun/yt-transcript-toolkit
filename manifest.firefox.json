@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "YT Transcript Copier",
+  "version": "1.1",
+  "description": "Copy YouTube video title and transcript to clipboard, or send to DeepSeek",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "yt-transcript-copier@example.com",
+      "strict_min_version": "109.0"
+    }
+  },
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://chat.deepseek.com/*"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/watch*"],
+      "js": ["content.js"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
