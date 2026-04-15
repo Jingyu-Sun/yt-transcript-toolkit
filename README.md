@@ -1,4 +1,4 @@
-# YT Transcript Copier
+# YouTube Transcript Toolkit
 
 A browser extension that extracts a YouTube video's title and transcript, then either copies it to the clipboard or sends it directly to DeepSeek with a user-editable prompt.
 

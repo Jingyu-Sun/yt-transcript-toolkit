@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const STRINGS = {
     en: {
-      appTitle: "YT Transcript Copier",
+      appTitle: "YouTube Transcript Toolkit",
       loading: "Loading…",
       promptLabel: "DeepSeek prompt",
       promptHelp: "Your prompt is prepended before the video title and transcript.",
@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       unexpectedResponse: "Unexpected response from page."
     },
     zh: {
-      appTitle: "YT 字幕复制器",
+      appTitle: "YouTube Transcript Toolkit",
       loading: "加载中…",
       promptLabel: "DeepSeek 提示词",
       promptHelp: "这个提示词会加在视频标题和字幕前面。",

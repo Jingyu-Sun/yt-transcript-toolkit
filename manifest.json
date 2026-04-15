@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "YT Transcript Copier",
+  "name": "YouTube Transcript Toolkit",
   "version": "1.1",
-  "description": "Copy YouTube video title and transcript to clipboard, or send to DeepSeek",
+  "description": "Extract, format, and send YouTube transcripts with prompt editing and timestamp control",
   "browser_specific_settings": {
     "gecko": {
-      "id": "yt-transcript-copier@example.com",
+      "id": "youtube-transcript-toolkit@example.com",
       "strict_min_version": "109.0"
     }
   },
