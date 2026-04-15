@@ -13,6 +13,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       loading: "Loading…",
       promptLabel: "DeepSeek prompt",
       promptHelp: "Your prompt is prepended before the video title and transcript.",
+      timestampsLabel: "Include timestamps",
+      timestampsHelp: "Keep YouTube transcript timestamps in copied and sent text.",
       copyButton: "Copy Title + Transcript",
       deepseekButton: "Send to DeepSeek",
       defaultPrompt: "Summarize the key points of this YouTube video in English based on the title and transcript. The transcript does not label speakers, so infer who is speaking when possible.\n==============\n",
@@ -35,6 +37,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       loading: "加载中…",
       promptLabel: "DeepSeek 提示词",
       promptHelp: "这个提示词会加在视频标题和字幕前面。",
+      timestampsLabel: "包含时间戳",
+      timestampsHelp: "控制复制和发送的字幕文本是否保留 YouTube 时间戳。",
       copyButton: "复制标题和字幕",
       deepseekButton: "发送到 DeepSeek",
       defaultPrompt: "根据youtube节目的标题和字幕，用中文总结节目的要点。字幕中没有标注哪句话是谁说的，请尽量推导讲话人：\n==============\n",
@@ -59,16 +63,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   const copyBtn = document.getElementById("copyBtn");
   const deepseekBtn = document.getElementById("deepseekBtn");
   const promptInput = document.getElementById("promptInput");
+  const includeTimestampsInput = document.getElementById("includeTimestamps");
   const statusEl = document.getElementById("status");
   const videoTitleEl = document.getElementById("videoTitle");
   const appTitleEl = document.getElementById("appTitle");
   const promptLabelEl = document.getElementById("promptLabel");
   const promptHelpEl = document.getElementById("promptHelp");
+  const timestampsLabelEl = document.getElementById("timestampsLabel");
+  const timestampsHelpEl = document.getElementById("timestampsHelp");
 
   applyLocale();
-  promptInput.value = await loadPrompt();
+  const preferences = await loadPreferences();
+  promptInput.value = preferences.prompt;
+  includeTimestampsInput.checked = preferences.includeTimestamps;
+
   promptInput.addEventListener("input", () => {
     savePrompt(promptInput.value);
+  });
+
+  includeTimestampsInput.addEventListener("change", () => {
+    saveIncludeTimestamps(includeTimestampsInput.checked);
   });
 
   function getLocale() {
@@ -84,6 +98,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     videoTitleEl.textContent = strings.loading;
     promptLabelEl.textContent = strings.promptLabel;
     promptHelpEl.textContent = strings.promptHelp;
+    timestampsLabelEl.textContent = strings.timestampsLabel;
+    timestampsHelpEl.textContent = strings.timestampsHelp;
     copyBtn.textContent = strings.copyButton;
     deepseekBtn.textContent = strings.deepseekButton;
   }
@@ -112,20 +128,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  function loadPrompt() {
+  function loadPreferences() {
     return new Promise((resolve) => {
       if (!storage) {
-        resolve(strings.defaultPrompt);
+        resolve({
+          prompt: strings.defaultPrompt,
+          includeTimestamps: true,
+        });
         return;
       }
 
-      storage.get(["deepseekPrompt"], (result) => {
+      storage.get(["deepseekPrompt", "includeTimestamps"], (result) => {
         if (runtimeApi.lastError) {
-          resolve(strings.defaultPrompt);
+          resolve({
+            prompt: strings.defaultPrompt,
+            includeTimestamps: true,
+          });
           return;
         }
 
-        resolve(result.deepseekPrompt || strings.defaultPrompt);
+        resolve({
+          prompt: result.deepseekPrompt || strings.defaultPrompt,
+          includeTimestamps: result.includeTimestamps !== false,
+        });
       });
     });
   }
@@ -136,6 +161,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     storage.set({ deepseekPrompt: value });
+  }
+
+  function saveIncludeTimestamps(value) {
+    if (!storage) {
+      return;
+    }
+
+    storage.set({ includeTimestamps: value });
   }
 
   function extractFromActiveTab() {
@@ -155,7 +188,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         tabsApi.sendMessage(
           tab.id,
-          { action: "extractTranscript" },
+          {
+            action: "extractTranscript",
+            includeTimestamps: includeTimestampsInput.checked,
+          },
           (response) => {
             if (runtimeApi.lastError) {
               reject(new Error(strings.refreshError));
@@ -183,6 +219,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       copyBtn.disabled = true;
       deepseekBtn.disabled = true;
       promptInput.disabled = true;
+      includeTimestampsInput.disabled = true;
       setStatus(strings.navigateYoutube, "error");
       return;
     }
@@ -191,6 +228,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!injected) {
       videoTitleEl.textContent = strings.connectErrorTitle;
       promptInput.disabled = true;
+      includeTimestampsInput.disabled = true;
       setStatus(strings.refreshError, "error");
       return;
     }

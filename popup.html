@@ -78,6 +78,36 @@
       resize: vertical;
     }
 
+    .toggle {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .toggle input {
+      margin-top: 2px;
+    }
+
+    .toggle-content {
+      flex: 1;
+    }
+
+    .toggle-content label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #333;
+      cursor: pointer;
+    }
+
+    .toggle-content p {
+      margin-top: 4px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #666;
+    }
+
     #copyBtn {
       width: 100%;
       padding: 10px 16px;
@@ -154,6 +184,14 @@
     <label id="promptLabel" for="promptInput">DeepSeek prompt</label>
     <p id="promptHelp">Your prompt is prepended before the video title and transcript.</p>
     <textarea id="promptInput" spellcheck="false"></textarea>
+  </div>
+
+  <div class="toggle">
+    <input id="includeTimestamps" type="checkbox" checked>
+    <div class="toggle-content">
+      <label id="timestampsLabel" for="includeTimestamps">Include timestamps</label>
+      <p id="timestampsHelp">Keep YouTube transcript timestamps in copied and sent text.</p>
+    </div>
   </div>
 
   <button id="copyBtn">Copy Title + Transcript</button>

@@ -13,7 +13,7 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   }
 
   if (request.action === "extractTranscript") {
-    extractTranscript()
+    extractTranscript(request.includeTimestamps !== false)
       .then((result) => sendResponse(result))
       .catch((err) => sendResponse({ error: err.message }));
     return true; // keep message channel open for async response
@@ -45,7 +45,7 @@ function getVideoTitle() {
  * 2. If not, open it (expand description → click Show Transcript)
  * 3. Scrape segments
  */
-async function extractTranscript() {
+async function extractTranscript(includeTimestamps) {
   const title = getVideoTitle();
 
   // Check if transcript panel is already visible
@@ -63,7 +63,7 @@ async function extractTranscript() {
   // Wait a moment for segments to fully render
   await sleep(500);
 
-  const transcript = scrapeTranscriptSegments();
+  const transcript = scrapeTranscriptSegments(includeTimestamps);
   if (!transcript) {
     throw new Error("Transcript panel is empty.");
   }
@@ -95,7 +95,10 @@ function findTranscriptPanel() {
     'ytd-engagement-panel-section-list-renderer[visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED"]'
   );
   for (const panel of expandedPanels) {
-    if (panel.querySelector(".ytwTranscriptSegmentViewModelTimestamp")) {
+    if (
+      panel.querySelector(".ytwTranscriptSegmentViewModelTimestamp") ||
+      panel.querySelector("ytd-transcript-segment-renderer")
+    ) {
       return panel;
     }
   }
@@ -206,7 +209,7 @@ function findShowTranscriptButton() {
  *
  * Supports both modern and legacy YouTube transcript layouts.
  */
-function scrapeTranscriptSegments() {
+function scrapeTranscriptSegments(includeTimestamps) {
   // Modern layout: timestamps use .ytwTranscriptSegmentViewModelTimestamp,
   // text uses span.ytAttributedStringHost
   const panel = findTranscriptPanel();
@@ -230,14 +233,14 @@ function scrapeTranscriptSegments() {
       const text = textEl ? textEl.textContent.trim() : "";
 
       if (text) {
-        lines.push(timestamp ? `${timestamp} ${text}` : text);
+        lines.push(includeTimestamps && timestamp ? `${timestamp} ${text}` : text);
       }
     }
     if (lines.length > 0) return lines.join("\n");
   }
 
   // --- Legacy layout ---
-  const segments = document.querySelectorAll(
+  const segments = panel.querySelectorAll(
     "ytd-transcript-segment-renderer"
   );
   if (segments.length > 0) {
@@ -250,7 +253,7 @@ function scrapeTranscriptSegments() {
       const text = textEl ? textEl.textContent.trim() : "";
 
       if (text) {
-        lines.push(timestamp ? `${timestamp} ${text}` : text);
+        lines.push(includeTimestamps && timestamp ? `${timestamp} ${text}` : text);
       }
     }
     if (lines.length > 0) return lines.join("\n");
