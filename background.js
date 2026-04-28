@@ -19,8 +19,8 @@ ext.runtime.onMessage.addListener((request, _sender, sendResponse) => {
 async function handleSendToDeepSeek(text) {
   const tab = await createTab({ url: "https://chat.deepseek.com" });
 
-  await waitForTabComplete(tab.id);
-  await sleep(2000);
+  await waitForTabReady(tab.id);
+  await sleep(1000);
   await executeDeepSeekScript(tab.id, text);
 }
 
@@ -41,24 +41,33 @@ function createTab(createProperties) {
 }
 
 /**
- * Wait for a tab to reach "complete" loading status.
+ * Poll until the tab reaches "interactive", "complete", or has been
+ * "loading" for over 3 seconds (stuck on slow third-party resources).
+ * Uses tabs.get() polling — more reliable than onUpdated across browsers.
  */
-function waitForTabComplete(tabId, timeoutMs = 30000) {
+function waitForTabReady(tabId, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      ext.tabs.onUpdated.removeListener(listener);
-      reject(new Error("Timed out waiting for DeepSeek page to load."));
-    }, timeoutMs);
+    const start = Date.now();
 
-    function listener(updatedTabId, changeInfo) {
-      if (updatedTabId === tabId && changeInfo.status === "complete") {
-        ext.tabs.onUpdated.removeListener(listener);
-        clearTimeout(timer);
-        resolve();
-      }
-    }
+    const poll = setInterval(() => {
+      ext.tabs.get(tabId).then((tab) => {
+        const elapsed = Date.now() - start;
 
-    ext.tabs.onUpdated.addListener(listener);
+        if (tab.status === "interactive" || tab.status === "complete") {
+          clearInterval(poll);
+          resolve();
+        } else if (tab.status === "loading" && elapsed > 3000) {
+          clearInterval(poll);
+          resolve();
+        } else if (elapsed > timeoutMs) {
+          clearInterval(poll);
+          reject(new Error("Timed out waiting for DeepSeek page to load."));
+        }
+      }).catch((err) => {
+        clearInterval(poll);
+        reject(err);
+      });
+    }, 500);
   });
 }
 
@@ -102,52 +111,84 @@ async function executeDeepSeekScript(tabId, text) {
 }
 
 /**
- * This function runs IN the DeepSeek page context (injected via executeScript).
- * It finds the chat textarea, sets its value, and submits.
+ * Runs IN the DeepSeek page context (injected via executeScript).
+ * Inserts text via execCommand for framework compatibility, then submits.
  */
 function pasteAndSubmit(text) {
-  const MAX_WAIT = 10000;
+  const MAX_WAIT = 30000;
   const POLL_INTERVAL = 500;
 
   return new Promise((resolve, reject) => {
     let elapsed = 0;
 
     const interval = setInterval(() => {
-      // Find the textarea — try multiple selectors
-      const textarea =
+      const el =
         document.querySelector("#chat-input") ||
         document.querySelector("textarea") ||
         document.querySelector('[contenteditable="true"]');
 
-      if (textarea) {
+      if (el) {
         clearInterval(interval);
 
         try {
-          // Focus the element
-          textarea.focus();
+          el.focus();
 
-          if (textarea.tagName === "TEXTAREA" || textarea.tagName === "INPUT") {
-            // Standard textarea: set value and dispatch input event for Vue reactivity
-            textarea.value = text;
-            textarea.dispatchEvent(new Event("input", { bubbles: true }));
-            textarea.dispatchEvent(new Event("change", { bubbles: true }));
-          } else {
-            // contenteditable div
-            textarea.textContent = text;
-            textarea.dispatchEvent(new InputEvent("input", { bubbles: true, data: text }));
+          // execCommand('insertText') triggers native input events that
+          // React / Vue controlled components actually observe.
+          const inserted = document.execCommand("insertText", false, text);
+
+          if (!inserted) {
+            if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
+              const proto = el.tagName === "TEXTAREA"
+                ? HTMLTextAreaElement.prototype
+                : HTMLInputElement.prototype;
+              const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+              if (setter) {
+                setter.call(el, text);
+              } else {
+                el.value = text;
+              }
+            } else {
+              el.textContent = text;
+            }
+            el.dispatchEvent(new Event("input", { bubbles: true }));
           }
 
-          // Wait a moment for the UI to react, then press Enter
           setTimeout(() => {
-            textarea.dispatchEvent(
-              new KeyboardEvent("keydown", {
-                key: "Enter",
-                code: "Enter",
-                keyCode: 13,
-                which: 13,
-                bubbles: true,
-              })
-            );
+            function simulateClick(target) {
+              const opts = { bubbles: true, cancelable: true, composed: true };
+              target.dispatchEvent(new PointerEvent("pointerdown", opts));
+              target.dispatchEvent(new MouseEvent("mousedown", opts));
+              target.dispatchEvent(new PointerEvent("pointerup", opts));
+              target.dispatchEvent(new MouseEvent("mouseup", opts));
+              target.dispatchEvent(new MouseEvent("click", opts));
+            }
+
+            // Walk up from the textarea to find the send button nearby,
+            // avoiding unrelated buttons (e.g. sidebar toggle).
+            let sendBtn = null;
+            let container = el.parentElement;
+            for (let i = 0; i < 5 && container && !sendBtn; i++) {
+              sendBtn = container.querySelector(
+                'div.ds-icon-button--sizing-icon[aria-disabled="false"]'
+              );
+              container = container.parentElement;
+            }
+
+            if (sendBtn) {
+              simulateClick(sendBtn);
+            } else {
+              el.focus();
+              el.dispatchEvent(
+                new KeyboardEvent("keydown", {
+                  key: "Enter",
+                  code: "Enter",
+                  keyCode: 13,
+                  which: 13,
+                  bubbles: true,
+                })
+              );
+            }
             resolve();
           }, 500);
         } catch (err) {
